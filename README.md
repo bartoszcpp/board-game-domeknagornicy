@@ -1,121 +1,125 @@
 # Domek na górnicy 🏠💎
 
-Cyfrowa implementacja planszowej gry **Domek na górnicy**. Gracze wcielają się
-w postacie, wędrują po mapie, zbierają kryształy i kupują runy — cel: zdobyć
-komplet 4 run i wrócić z nimi do Domku.
+A digital implementation of the board game **Domek na górnicy** ("The Cabin on the
+Mine"). Players take on characters, travel across the map, collect crystals and buy
+runes — the goal is to gather a full set of 4 runes and bring them back to the Cabin.
 
-Projekt jest budowany warstwowo: najpierw **headless** silnik gry (czysta logika,
-bez UI), a następnie warstwa interfejsu w React.
+The project is built in layers: first a **headless** game engine (pure logic, no UI),
+then the interface layer in React.
 
-## Stos technologiczny
+## Tech stack
 
 - **[Next.js 16](https://nextjs.org)** (App Router, Turbopack) + **React 19**
-- **[Zustand](https://github.com/pmndrs/zustand)** — globalny stan gry
-- **[Tailwind CSS 4](https://tailwindcss.com)** — style UI
-- **[XState](https://stately.ai/docs/xstate)** — szkielet maszyny stanów (faza dnia)
-- **TypeScript** — w całości
+- **[Zustand](https://github.com/pmndrs/zustand)** — global game state
+- **[Tailwind CSS 4](https://tailwindcss.com)** — UI styling
+- **[XState](https://stately.ai/docs/xstate)** — state-machine scaffold (day phase)
+- **TypeScript** — throughout
 
-> ⚠️ **Next.js w tym repo może różnić się od wersji, którą znasz.** Przed pisaniem
-> kodu zajrzyj do `node_modules/next/dist/docs/` (patrz `AGENTS.md`).
+> ⚠️ **The Next.js in this repo may differ from the version you know.** Check
+> `node_modules/next/dist/docs/` before writing code (see `AGENTS.md`).
 
-## Wymagania
+## Requirements
 
-- **Node.js ≥ 20** (Next 16 nie działa na starszych wersjach).
+- **Node.js ≥ 20** (Next 16 does not run on older versions).
 
 ```bash
-nvm use 22   # lub dowolna wersja 20+
+nvm use 22   # or any version 20+
 ```
 
-## Uruchomienie
+## Getting started
 
 ```bash
 npm install
 npm run dev
 ```
 
-Aplikacja: [http://localhost:3000](http://localhost:3000).
+App: [http://localhost:3000](http://localhost:3000).
 
-Pozostałe skrypty:
+Other scripts:
 
 ```bash
-npm run build   # build produkcyjny
-npm run start   # serwer produkcyjny
+npm run build   # production build
+npm run start   # production server
 npm run lint    # ESLint
 ```
 
-## Struktura projektu
+## Project structure
 
 ```
 src/
-├── app/                    # Next.js App Router (layout, strona, style globalne)
-│   └── page.tsx            # renderuje PlayerDashboard
+├── app/                    # Next.js App Router (layout, page, global styles)
+│   └── page.tsx            # renders PlayerDashboard
 ├── config/
-│   └── gameConfig.ts       # dane gry: postacie, lokalizacje, harmonogram, karty
-├── engine/                 # HEADLESS silnik gry (czysta logika, bez React)
-│   ├── gameEngine.ts       # typy stanu + gameReducer(state, action)
-│   ├── navigation.ts       # graf mapy i wyznaczanie kosztu tras (Dijkstra)
-│   └── setup.ts            # createInitialState() — początkowy stan gry
+│   └── gameConfig.ts       # game data: characters, locations, schedule, cards
+├── engine/                 # HEADLESS game engine (pure logic, no React)
+│   ├── gameEngine.ts       # state types + gameReducer(state, action)
+│   ├── navigation.ts       # map graph and path-cost resolution (Dijkstra)
+│   └── setup.ts            # createInitialState() — initial game state
 ├── machine/
-│   └── gameMachine.ts      # szkielet maszyny XState (faza dnia)
+│   └── gameMachine.ts      # XState machine scaffold (day phase)
 ├── store/
-│   ├── useGameStore.ts     # Zustand: stan + akcje podpięte do silnika
-│   └── useUIStore.ts       # Zustand: stan UI (np. panele)
+│   ├── useGameStore.ts     # Zustand: state + actions wired to the engine
+│   └── useUIStore.ts       # Zustand: UI state (e.g. panels)
 └── components/
-    ├── PlayerDashboard.tsx # główny widok gracza
-    ├── NightPenaltyModal.tsx # modal Głębokiej nocy
-    └── CrystalSquare.tsx   # kryształy jako kolorowe kwadraty
+    ├── PlayerDashboard.tsx # main player view
+    ├── NightPenaltyModal.tsx # deep-night modal
+    └── CrystalSquare.tsx   # crystals rendered as colored squares
 
 docs/
-├── zasady-gry.md           # zasady (transkrypcja z pliku źródłowego)
-├── specyfikacje.md         # tabele postaci/lokalizacji/kart
-└── zrodla/                 # oryginalne pliki .docx / .pdf
+├── zasady-gry.md           # rules (transcribed from the source file)
+├── specyfikacje.md         # character/location/card tables
+└── zrodla/                 # original .docx / .pdf source files
 ```
 
-## Architektura
+## Architecture
 
-### 1. Silnik headless (`src/engine`)
+### 1. Headless engine (`src/engine`)
 
-Cała logika gry to czysta funkcja:
+All game logic is a pure function:
 
 ```ts
 gameReducer(state: GameState, action: GameAction): EngineResult
 ```
 
-Reducer nie zna Reacta — przyjmuje stan i akcję, zwraca nowy stan **albo** błąd
-(`{ success: false, error }`). Dzięki temu logikę można testować i uruchamiać
-niezależnie od UI. Obsługiwane akcje m.in.: ruch, czerpanie kryształów, wpłata do
-Banku, odkładanie do prywatnego pokoju, zakup runy, kara nocy, koniec tury.
+The reducer knows nothing about React — it takes a state and an action and returns
+a new state **or** an error (`{ success: false, error }`). This makes the logic
+testable and runnable independently of the UI. Supported actions include: movement,
+drawing crystals, depositing to the Bank, stashing in the private room, buying a
+rune, the night penalty, and ending the turn.
 
-### 2. Stan globalny (`src/store/useGameStore.ts`)
+### 2. Global state (`src/store/useGameStore.ts`)
 
-Store Zustand trzyma `GameState` i wystawia akcje-skróty (`movePlayer`,
-`buyRune`, `depositToBank`, `resolveNightPenalty`, `endTurn`, …), które pod spodem
-wywołują `gameReducer` i aktualizują stan. Błędy silnika trafiają do `lastError`.
+The Zustand store holds `GameState` and exposes convenience actions (`movePlayer`,
+`buyRune`, `depositToBank`, `resolveNightPenalty`, `endTurn`, …) that call
+`gameReducer` under the hood and update the state. Engine errors surface in
+`lastError`.
 
-### 3. Interfejs (`src/components`)
+### 3. Interface (`src/components`)
 
-`PlayerDashboard` prezentuje aktywnego gracza: imię postaci, Punkty Akcji (PA),
-godzinę i fazę dnia, zawartość plecaka i prywatnego pokoju (kolorowe kwadraty),
-lokalny Bank, zebrane runy oraz przyciski akcji. `NightPenaltyModal` pojawia się
-po północy i wymusza wybór *odrzuć kartę / strać 1 PA*, blokując pozostałe akcje.
+`PlayerDashboard` presents the active player: character name, Action Points (AP),
+time and day phase, backpack and private-room contents (colored squares), the local
+Bank, collected runes, and action buttons. `NightPenaltyModal` appears after
+midnight and forces a choice — *discard a card / lose 1 AP* — blocking other actions.
 
-## Zasady gry (skrót)
+## Game rules (summary)
 
-- Gra startuje o **8:00**; każda tura daje graczowi **3 PA**.
-- **Cel:** zdobyć 4 runy (Lasek, Palenisko, Altana, Wzgórze) i wrócić do Domku.
-- **Koszt runy:** azyl 2 💎 · neutralna 4 💎 · wroga lokalizacja 6 💎 (płatność
-  z plecaka + lokalnego Banku).
-- **Bank** jest wspólny (kryształy można stamtąd podbierać), **prywatny pokój**
-  w Domku jest bezpiecznym schowkiem.
-- **Faza dnia** (Poranek → Dzień → Zmierzch → Noc) zmienia zasady ruchu; po północy
-  obowiązuje kara nocy.
+- The game starts at **08:00**; each turn grants the player **3 AP**.
+- **Goal:** collect 4 runes (Lasek, Palenisko, Altana, Wzgórze) and return to the Cabin.
+- **Rune cost:** asylum 2 💎 · neutral 4 💎 · enemy location 6 💎 (paid from the
+  backpack + local Bank).
+- The **Bank** is shared (anyone can take crystals from it), while the **private
+  room** in the Cabin is a safe stash.
+- The **day phase** (Morning → Day → Dusk → Night) changes movement rules; after
+  midnight the night penalty applies.
 
-Pełne zasady: [`docs/zasady-gry.md`](docs/zasady-gry.md) ·
-Specyfikacje: [`docs/specyfikacje.md`](docs/specyfikacje.md).
+Full rules: [`docs/zasady-gry.md`](docs/zasady-gry.md) ·
+Specs: [`docs/specyfikacje.md`](docs/specyfikacje.md).
 
-## Status prac
+## Status
 
-- [x] **Krok 1–2** — dane gry i konfiguracja (`gameConfig.ts`)
-- [x] **Krok 3** — headless silnik: reducer + nawigacja po mapie
-- [x] **Krok 4** — warstwa UI: Zustand + `PlayerDashboard` + modal nocy
-- [ ] Kolejne kroki — plansza/mapa, karty, tryb wieloosobowy
+- [x] **Steps 1–2** — game data and configuration (`gameConfig.ts`)
+- [x] **Step 3** — headless engine: reducer + map navigation
+- [x] **Step 4** — UI layer: Zustand + `PlayerDashboard` + night modal
+- [ ] Next steps — board/map, cards, multiplayer
+```
+
