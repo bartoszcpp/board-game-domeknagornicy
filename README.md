@@ -1,36 +1,121 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Domek na górnicy 🏠💎
 
-## Getting Started
+Cyfrowa implementacja planszowej gry **Domek na górnicy**. Gracze wcielają się
+w postacie, wędrują po mapie, zbierają kryształy i kupują runy — cel: zdobyć
+komplet 4 run i wrócić z nimi do Domku.
 
-First, run the development server:
+Projekt jest budowany warstwowo: najpierw **headless** silnik gry (czysta logika,
+bez UI), a następnie warstwa interfejsu w React.
+
+## Stos technologiczny
+
+- **[Next.js 16](https://nextjs.org)** (App Router, Turbopack) + **React 19**
+- **[Zustand](https://github.com/pmndrs/zustand)** — globalny stan gry
+- **[Tailwind CSS 4](https://tailwindcss.com)** — style UI
+- **[XState](https://stately.ai/docs/xstate)** — szkielet maszyny stanów (faza dnia)
+- **TypeScript** — w całości
+
+> ⚠️ **Next.js w tym repo może różnić się od wersji, którą znasz.** Przed pisaniem
+> kodu zajrzyj do `node_modules/next/dist/docs/` (patrz `AGENTS.md`).
+
+## Wymagania
+
+- **Node.js ≥ 20** (Next 16 nie działa na starszych wersjach).
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+nvm use 22   # lub dowolna wersja 20+
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Uruchomienie
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm install
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Aplikacja: [http://localhost:3000](http://localhost:3000).
 
-## Learn More
+Pozostałe skrypty:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm run build   # build produkcyjny
+npm run start   # serwer produkcyjny
+npm run lint    # ESLint
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Struktura projektu
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+src/
+├── app/                    # Next.js App Router (layout, strona, style globalne)
+│   └── page.tsx            # renderuje PlayerDashboard
+├── config/
+│   └── gameConfig.ts       # dane gry: postacie, lokalizacje, harmonogram, karty
+├── engine/                 # HEADLESS silnik gry (czysta logika, bez React)
+│   ├── gameEngine.ts       # typy stanu + gameReducer(state, action)
+│   ├── navigation.ts       # graf mapy i wyznaczanie kosztu tras (Dijkstra)
+│   └── setup.ts            # createInitialState() — początkowy stan gry
+├── machine/
+│   └── gameMachine.ts      # szkielet maszyny XState (faza dnia)
+├── store/
+│   ├── useGameStore.ts     # Zustand: stan + akcje podpięte do silnika
+│   └── useUIStore.ts       # Zustand: stan UI (np. panele)
+└── components/
+    ├── PlayerDashboard.tsx # główny widok gracza
+    ├── NightPenaltyModal.tsx # modal Głębokiej nocy
+    └── CrystalSquare.tsx   # kryształy jako kolorowe kwadraty
 
-## Deploy on Vercel
+docs/
+├── zasady-gry.md           # zasady (transkrypcja z pliku źródłowego)
+├── specyfikacje.md         # tabele postaci/lokalizacji/kart
+└── zrodla/                 # oryginalne pliki .docx / .pdf
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Architektura
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### 1. Silnik headless (`src/engine`)
+
+Cała logika gry to czysta funkcja:
+
+```ts
+gameReducer(state: GameState, action: GameAction): EngineResult
+```
+
+Reducer nie zna Reacta — przyjmuje stan i akcję, zwraca nowy stan **albo** błąd
+(`{ success: false, error }`). Dzięki temu logikę można testować i uruchamiać
+niezależnie od UI. Obsługiwane akcje m.in.: ruch, czerpanie kryształów, wpłata do
+Banku, odkładanie do prywatnego pokoju, zakup runy, kara nocy, koniec tury.
+
+### 2. Stan globalny (`src/store/useGameStore.ts`)
+
+Store Zustand trzyma `GameState` i wystawia akcje-skróty (`movePlayer`,
+`buyRune`, `depositToBank`, `resolveNightPenalty`, `endTurn`, …), które pod spodem
+wywołują `gameReducer` i aktualizują stan. Błędy silnika trafiają do `lastError`.
+
+### 3. Interfejs (`src/components`)
+
+`PlayerDashboard` prezentuje aktywnego gracza: imię postaci, Punkty Akcji (PA),
+godzinę i fazę dnia, zawartość plecaka i prywatnego pokoju (kolorowe kwadraty),
+lokalny Bank, zebrane runy oraz przyciski akcji. `NightPenaltyModal` pojawia się
+po północy i wymusza wybór *odrzuć kartę / strać 1 PA*, blokując pozostałe akcje.
+
+## Zasady gry (skrót)
+
+- Gra startuje o **8:00**; każda tura daje graczowi **3 PA**.
+- **Cel:** zdobyć 4 runy (Lasek, Palenisko, Altana, Wzgórze) i wrócić do Domku.
+- **Koszt runy:** azyl 2 💎 · neutralna 4 💎 · wroga lokalizacja 6 💎 (płatność
+  z plecaka + lokalnego Banku).
+- **Bank** jest wspólny (kryształy można stamtąd podbierać), **prywatny pokój**
+  w Domku jest bezpiecznym schowkiem.
+- **Faza dnia** (Poranek → Dzień → Zmierzch → Noc) zmienia zasady ruchu; po północy
+  obowiązuje kara nocy.
+
+Pełne zasady: [`docs/zasady-gry.md`](docs/zasady-gry.md) ·
+Specyfikacje: [`docs/specyfikacje.md`](docs/specyfikacje.md).
+
+## Status prac
+
+- [x] **Krok 1–2** — dane gry i konfiguracja (`gameConfig.ts`)
+- [x] **Krok 3** — headless silnik: reducer + nawigacja po mapie
+- [x] **Krok 4** — warstwa UI: Zustand + `PlayerDashboard` + modal nocy
+- [ ] Kolejne kroki — plansza/mapa, karty, tryb wieloosobowy
